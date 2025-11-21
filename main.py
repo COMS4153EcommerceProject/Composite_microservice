@@ -1,175 +1,269 @@
 from __future__ import annotations
-
 import os
-import socket
 from datetime import datetime
-
-from typing import Dict, List
 from uuid import UUID
+from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import uuid
 
-from fastapi import FastAPI, HTTPException
-from fastapi import Query, Path
-from typing import Optional
+import requests
+from fastapi import FastAPI, HTTPException, status
 
-from models.person import PersonCreate, PersonRead, PersonUpdate
-from models.address import AddressCreate, AddressRead, AddressUpdate
-from models.health import Health
-
-port = int(os.environ.get("FASTAPIPORT", 8000))
-
-# -----------------------------------------------------------------------------
-# Fake in-memory "databases"
-# -----------------------------------------------------------------------------
-persons: Dict[UUID, PersonRead] = {}
-addresses: Dict[UUID, AddressRead] = {}
+# -------------------------------------------------------------------
+# automic microservice urls
+# -------------------------------------------------------------------
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
+ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://localhost:8002")
+PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8003")
 
 app = FastAPI(
-    title="Person/Address API",
-    description="Demo FastAPI app using Pydantic v2 models for Person and Address",
+    title="Composite Microservice",
+    description="Composite service that orchestrates User, Order, and Product services.",
     version="0.1.0",
 )
 
-# -----------------------------------------------------------------------------
-# Address endpoints
-# -----------------------------------------------------------------------------
+executor = ThreadPoolExecutor(max_workers=10)
 
-def make_health(echo: Optional[str], path_echo: Optional[str]=None) -> Health:
-    return Health(
-        status=200,
-        status_message="OK",
-        timestamp=datetime.utcnow().isoformat() + "Z",
-        ip_address=socket.gethostbyname(socket.gethostname()),
-        echo=echo,
-        path_echo=path_echo
-    )
+operations_store: Dict[str, Dict[str, Any]] = {}
 
-@app.get("/health", response_model=Health)
-def get_health_no_path(echo: str | None = Query(None, description="Optional echo string")):
-    # Works because path_echo is optional in the model
-    return make_health(echo=echo, path_echo=None)
 
-@app.get("/health/{path_echo}", response_model=Health)
-def get_health_with_path(
-    path_echo: str = Path(..., description="Required echo in the URL path"),
-    echo: str | None = Query(None, description="Optional echo string"),
-):
-    return make_health(echo=echo, path_echo=path_echo)
+from pydantic import BaseModel, Field
+from typing import List
 
-@app.post("/addresses", response_model=AddressRead, status_code=201)
-def create_address(address: AddressCreate):
-    if address.id in addresses:
-        raise HTTPException(status_code=400, detail="Address with this ID already exists")
-    addresses[address.id] = AddressRead(**address.model_dump())
-    return addresses[address.id]
+class CheckoutItem(BaseModel):
+    product_id: UUID
+    quantity: int = Field(gt=0)
 
-@app.get("/addresses", response_model=List[AddressRead])
-def list_addresses(
-    street: Optional[str] = Query(None, description="Filter by street"),
-    city: Optional[str] = Query(None, description="Filter by city"),
-    state: Optional[str] = Query(None, description="Filter by state/region"),
-    postal_code: Optional[str] = Query(None, description="Filter by postal code"),
-    country: Optional[str] = Query(None, description="Filter by country"),
-):
-    results = list(addresses.values())
+class CheckoutRequest(BaseModel):
+    items: List[CheckoutItem]
 
-    if street is not None:
-        results = [a for a in results if a.street == street]
-    if city is not None:
-        results = [a for a in results if a.city == city]
-    if state is not None:
-        results = [a for a in results if a.state == state]
-    if postal_code is not None:
-        results = [a for a in results if a.postal_code == postal_code]
-    if country is not None:
-        results = [a for a in results if a.country == country]
 
-    return results
+# -------------------------------------------------------------------
+# Helper
+# -------------------------------------------------------------------
+def _check(resp: requests.Response, name: str):
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"{name} not found")
+    if not resp.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream error from {name} ({resp.status_code})"
+        )
+    return resp.json()
 
-@app.get("/addresses/{address_id}", response_model=AddressRead)
-def get_address(address_id: UUID):
-    if address_id not in addresses:
-        raise HTTPException(status_code=404, detail="Address not found")
-    return addresses[address_id]
 
-@app.patch("/addresses/{address_id}", response_model=AddressRead)
-def update_address(address_id: UUID, update: AddressUpdate):
-    if address_id not in addresses:
-        raise HTTPException(status_code=404, detail="Address not found")
-    stored = addresses[address_id].model_dump()
-    stored.update(update.model_dump(exclude_unset=True))
-    addresses[address_id] = AddressRead(**stored)
-    return addresses[address_id]
+# -------------------------------------------------------------------
+# 1) Checkout
+# -------------------------------------------------------------------
+@app.post("/composite/users/{user_id}/checkout", status_code=201)
+def checkout(user_id: UUID, body: CheckoutRequest):
+    user_resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+    user_json = _check(user_resp, "User")
 
-# -----------------------------------------------------------------------------
-# Person endpoints
-# -----------------------------------------------------------------------------
-@app.post("/persons", response_model=PersonRead, status_code=201)
-def create_person(person: PersonCreate):
-    # Each person gets its own UUID; stored as PersonRead
-    person_read = PersonRead(**person.model_dump())
-    persons[person_read.id] = person_read
-    return person_read
+    items_info: List[Dict[str, Any]] = []
 
-@app.get("/persons", response_model=List[PersonRead])
-def list_persons(
-    uni: Optional[str] = Query(None, description="Filter by Columbia UNI"),
-    first_name: Optional[str] = Query(None, description="Filter by first name"),
-    last_name: Optional[str] = Query(None, description="Filter by last name"),
-    email: Optional[str] = Query(None, description="Filter by email"),
-    phone: Optional[str] = Query(None, description="Filter by phone number"),
-    birth_date: Optional[str] = Query(None, description="Filter by date of birth (YYYY-MM-DD)"),
-    city: Optional[str] = Query(None, description="Filter by city of at least one address"),
-    country: Optional[str] = Query(None, description="Filter by country of at least one address"),
-):
-    results = list(persons.values())
+    for item in body.items:
+        product_id = item.product_id
 
-    if uni is not None:
-        results = [p for p in results if p.uni == uni]
-    if first_name is not None:
-        results = [p for p in results if p.first_name == first_name]
-    if last_name is not None:
-        results = [p for p in results if p.last_name == last_name]
-    if email is not None:
-        results = [p for p in results if p.email == email]
-    if phone is not None:
-        results = [p for p in results if p.phone == phone]
-    if birth_date is not None:
-        results = [p for p in results if str(p.birth_date) == birth_date]
+        p_resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
+        product = _check(p_resp, "Product")
 
-    # nested address filtering
-    if city is not None:
-        results = [p for p in results if any(addr.city == city for addr in p.addresses)]
-    if country is not None:
-        results = [p for p in results if any(addr.country == country for addr in p.addresses)]
 
-    return results
+        inv_resp = requests.get(f"{PRODUCT_SERVICE_URL}/{product_id}/inventory")
+        inventory = _check(inv_resp, "Inventory")
 
-@app.get("/persons/{person_id}", response_model=PersonRead)
-def get_person(person_id: UUID):
-    if person_id not in persons:
-        raise HTTPException(status_code=404, detail="Person not found")
-    return persons[person_id]
+        if inventory["stock_quantity"] < item.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough stock for product {product_id}"
+            )
 
-@app.patch("/persons/{person_id}", response_model=PersonRead)
-def update_person(person_id: UUID, update: PersonUpdate):
-    if person_id not in persons:
-        raise HTTPException(status_code=404, detail="Person not found")
-    stored = persons[person_id].model_dump()
-    stored.update(update.model_dump(exclude_unset=True))
-    persons[person_id] = PersonRead(**stored)
-    return persons[person_id]
+        line_total = product["price"] * item.quantity
 
-# -----------------------------------------------------------------------------
+        items_info.append({
+            "product_id": product["product_id"],
+            "product": product,
+            "inventory": inventory,
+            "quantity": item.quantity,
+            "line_total": line_total,
+        })
+
+    # Create the order
+    total_price = sum(i["line_total"] for i in items_info)
+    order_payload = {
+        "user_id": str(user_id),
+        "order_date": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "total_price": total_price,
+        "status": "PENDING",
+    }
+    order_resp = requests.post(f"{ORDER_SERVICE_URL}/orders", json=order_payload)
+    order_json = _check(order_resp, "Order")
+    order_id = order_json["order_id"]
+
+    # Create corresponding OrderDetail for each order
+    details_out = []
+    for item in items_info:
+        detail_payload = {
+            "order_id": order_id,
+            "prod_id": item["product_id"],
+            "quantity": item["quantity"],
+            "subtotal": item["line_total"],
+        }
+
+        d_resp = requests.post(
+            f"{ORDER_SERVICE_URL}/order-details",
+            json=detail_payload
+        )
+        detail_json = _check(d_resp, "OrderDetail")
+        details_out.append(detail_json)
+
+        # Decrease the inventory
+        new_qty = item["inventory"]["stock_quantity"] - item["quantity"]
+        inv_update_payload = {"stock_quantity": new_qty}
+
+        inv_up_resp = requests.put(
+            f"{PRODUCT_SERVICE_URL}/inventories/{item['product_id']}",
+            json=inv_update_payload,
+        )
+        _check(inv_up_resp, "InventoryUpdate")
+
+    # Create payment (default method: credit card?)
+    pay_payload = {
+        "order_id": order_id,
+        "payment_method": "CREDIT_CARD",
+        "payment_date": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "amount": total_price,
+    }
+    pay_resp = requests.post(f"{ORDER_SERVICE_URL}/payments", json=pay_payload)
+    payment_json = _check(pay_resp, "Payment")
+
+    return {
+        "user": user_json,
+        "order": order_json,
+        "order_details": details_out,
+        "payment": payment_json,
+    }
+
+
+@app.get("/composite/users/{user_id}/order-summary")
+def order_summary(user_id: UUID):
+
+    def f_user():
+        resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+        return _check(resp, "User")
+
+    def f_pref():
+        resp = requests.get(f"{USER_SERVICE_URL}/preferences/{user_id}")
+        if resp.status_code == 404:
+            return None
+        return _check(resp, "Preference")
+
+    def f_addresses():
+        resp = requests.get(
+            f"{USER_SERVICE_URL}/user_addresses",
+            params={"user_id": str(user_id)}
+        )
+        mappings = _check(resp, "UserAddress")
+
+        out = []
+        for m in mappings:
+            addr_id = m["addr_id"]
+            ar = requests.get(f"{USER_SERVICE_URL}/addresses/{addr_id}")
+
+            if ar.status_code == 404:
+                continue
+
+            addr_json = _check(ar, "Address")
+            out.append(addr_json)
+
+        return out
+
+    def f_orders():
+        resp = requests.get(
+            f"{ORDER_SERVICE_URL}/orders",
+            params={"user_id": str(user_id)}
+        )
+        if not resp.ok:
+            return []
+        return resp.json()
+
+    futures = {
+        executor.submit(f_user): "user",
+        executor.submit(f_pref): "pref",
+        executor.submit(f_addresses): "addr",
+        executor.submit(f_orders): "orders",
+    }
+
+    data: Dict[str, Any] = {}
+    for f in as_completed(futures):
+        key = futures[f]
+        data[key] = f.result()
+
+    enriched_orders = []
+
+    def enrich(order):
+        oid = order["order_id"]
+
+        pay_r = requests.get(f"{ORDER_SERVICE_URL}/payments", params={"order_id": oid})
+        payments = pay_r.json() if pay_r.ok else []
+
+        det_r = requests.get(f"{ORDER_SERVICE_URL}/order-details", params={"order_id": oid})
+        details = det_r.json() if det_r.ok else []
+
+        for d in details:
+            pid = d["prod_id"]
+            p_r = requests.get(f"{PRODUCT_SERVICE_URL}/products/{pid}")
+            if p_r.ok:
+                d["product"] = p_r.json()
+            i_r = requests.get(f"{PRODUCT_SERVICE_URL}/inventories/{pid}")
+            if i_r.ok:
+                d["inventory"] = i_r.json()
+
+        return {
+            "order": order,
+            "payments": payments,
+            "details": details,
+        }
+
+    futures2 = {executor.submit(enrich, o): o["order_id"] for o in data["orders"]}
+    for fs in as_completed(futures2):
+        enriched_orders.append(fs.result())
+
+    return {
+        "user": data["user"],
+        "preference": data.get("pref"),
+        "addresses": data["addr"],
+        "orders": enriched_orders,
+    }
+
+
+
+@app.post("/composite/reports/user-orders", status_code=202)
+def generate_report(user_id: UUID):
+    op_id = str(uuid.uuid4())
+    operations_store[op_id] = {"status": "PENDING", "result": None}
+
+    def job():
+        try:
+            r = order_summary(user_id)
+            operations_store[op_id] = {"status": "COMPLETED", "result": r}
+        except Exception as e:
+            operations_store[op_id] = {"status": "FAILED", "error": str(e)}
+
+    executor.submit(job)
+    return {"operation_id": op_id, "status": "PENDING"}
+
+
+@app.get("/composite/reports/user-orders/{operation_id}")
+def get_report(operation_id: str):
+    if operation_id not in operations_store:
+        raise HTTPException(status_code=404, detail="Operation not found")
+    return operations_store[operation_id]
+
+
+# -------------------------------------------------------------------
 # Root
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "Welcome to the Person/Address API. See /docs for OpenAPI UI."}
-
-# -----------------------------------------------------------------------------
-# Entrypoint for `python main.py`
-# -----------------------------------------------------------------------------
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    return {"message": "Composite service ready. Orchestrating User/Order/Product."}
