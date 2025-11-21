@@ -50,7 +50,39 @@ def _check(resp: requests.Response, name: str):
             detail=f"Upstream error from {name} ({resp.status_code})"
         )
     return resp.json()
+# -------------------------------------------------------------------
+# A) Proxy endpoints (re-expose atomic microservice APIs)
+# -------------------------------------------------------------------
 
+@app.get("/composite/users/{user_id}")
+def proxy_get_user(user_id: UUID):
+    """Proxy: get a single user via the User Service."""
+    resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+    return _check(resp, "User")
+
+
+@app.get("/composite/products/{product_id}")
+def proxy_get_product(product_id: UUID):
+    """Proxy: get a single product via the Product Service."""
+    resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
+    return _check(resp, "Product")
+
+
+@app.get("/composite/orders/{order_id}")
+def proxy_get_order(order_id: UUID):
+    """Proxy: get a single order via the Order Service."""
+    resp = requests.get(f"{ORDER_SERVICE_URL}/orders/{order_id}")
+    return _check(resp, "Order")
+
+
+@app.get("/composite/products/{product_id}/inventory")
+def proxy_get_inventory(product_id: UUID):
+    """
+    Proxy: get inventory for a product via the Product Service.
+    Uses the /products/{product_id}/inventory endpoint of the Product service.
+    """
+    resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}/inventory")
+    return _check(resp, "Inventory")
 
 # -------------------------------------------------------------------
 # 1) Checkout
