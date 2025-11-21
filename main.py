@@ -69,7 +69,7 @@ def checkout(user_id: UUID, body: CheckoutRequest):
         product = _check(p_resp, "Product")
 
 
-        inv_resp = requests.get(f"{PRODUCT_SERVICE_URL}/{product_id}/inventory")
+        inv_resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}/inventory")
         inventory = _check(inv_resp, "Inventory")
 
         if inventory["stock_quantity"] < item.quantity:
