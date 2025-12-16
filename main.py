@@ -286,6 +286,11 @@ def get_report(operation_id: str):
 def healthz():
     return {"ok": True}
 
+@app.get("/favicon.ico")
+def favicon():
+    return {}, 204
+
+
 # -------------------------------------------------------------------
 # Root
 # -------------------------------------------------------------------
