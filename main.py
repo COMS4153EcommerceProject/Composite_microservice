@@ -511,6 +511,16 @@ def proxy_delete_inventory(inventory_id: UUID):
 
     return _check(resp, "Inventory")
 
+@app.get(
+    "/composite/products/{product_id}/inventory",
+    tags=["Product Proxy"]
+)
+def proxy_get_product_inventory(product_id: UUID):
+    """Proxy: get inventory for a product via the Product Service."""
+    resp = requests.get(
+        f"{PRODUCT_SERVICE_URL}/products/{product_id}/inventory"
+    )
+    return _check(resp, "Inventory")
 '''
 proxy for orders
 '''
@@ -893,7 +903,7 @@ def proxy_get_task_status(task_id: UUID):
 # 1) Checkout
 # -------------------------------------------------------------------
 @app.post("/composite/users/{user_id}/checkout", status_code=201)
-def checkout(user_id: UUID, body: CheckoutRequest):
+def checkout(user_id: UUID, body: CheckoutRequest, request: Request):
     user_resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
     user_json = _check(user_resp, "User")
 
@@ -924,16 +934,22 @@ def checkout(user_id: UUID, body: CheckoutRequest):
             "quantity": item.quantity,
             "line_total": line_total,
         })
+    headers = {}
+    if "authorization" in request.headers:
+        headers["Authorization"] = request.headers["authorization"]
 
     # Create the order
     total_price = sum(i["line_total"] for i in items_info)
     order_payload = {
         "user_id": str(user_id),
-        "order_date": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
         "total_price": total_price,
         "status": "PENDING",
     }
-    order_resp = requests.post(f"{ORDER_SERVICE_URL}/orders", json=order_payload)
+    order_resp = requests.post(
+        f"{ORDER_SERVICE_URL}/orders",
+        json=order_payload,
+        headers=headers,
+    )
     order_json = _check(order_resp, "Order")
     order_id = order_json["order_id"]
 
@@ -991,7 +1007,7 @@ def order_summary(user_id: UUID):
 
     def f_pref():
         resp = requests.get(f"{USER_SERVICE_URL}/preferences/{user_id}")
-        if resp.status_code == 404:
+        if resp.status_code == 404 or resp.status_code == 501:
             return None
         return _check(resp, "Preference")
 
@@ -1007,7 +1023,7 @@ def order_summary(user_id: UUID):
             addr_id = m["addr_id"]
             ar = requests.get(f"{USER_SERVICE_URL}/addresses/{addr_id}")
 
-            if ar.status_code == 404:
+            if ar.status_code in (404, 501):
                 continue
 
             addr_json = _check(ar, "Address")
