@@ -50,7 +50,7 @@ def _check(resp: requests.Response, name: str):
 # -------------------------------------------------------------------
 # A) Proxy endpoints (re-expose atomic microservice APIs)
 # -------------------------------------------------------------------
-@app.get("/healthz")
+@app.get("/composite/healthz")
 def healthz():
     return {"message": "health_check"}
 @app.get("/composite/users/{user_id}")
