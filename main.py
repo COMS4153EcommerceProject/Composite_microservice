@@ -9,10 +9,11 @@ import uuid
 import requests
 from fastapi import FastAPI, HTTPException, status, Response
 
-from Composite_microservice.models.address import AddressRead, AddressCreate, AddressUpdate
-from Composite_microservice.models.preference import PreferenceRead, PreferenceCreate, PreferenceUpdate
-from Composite_microservice.models.user import UserRead, UserUpdate, UserCreate
-from Composite_microservice.models.user_address import UserAddressRead
+from models.address import AddressRead, AddressCreate, AddressUpdate
+from models.preference import PreferenceRead, PreferenceCreate, PreferenceUpdate
+from models.product import ProductRead, ProductCreate
+from models.user import UserRead, UserUpdate, UserCreate
+from models.user_address import UserAddressRead
 from models.composite import CheckoutRequest
 # -------------------------------------------------------------------
 # automic microservice urls
@@ -270,6 +271,45 @@ def proxy_delete_user_address(user_id: UUID, addr_id: UUID):
         return Response(status_code=204)
 
     return _check(resp, "UserAddress")
+
+'''
+proxy for product
+'''
+@app.post(
+    "/composite/products",
+    response_model=ProductRead,
+    status_code=201,
+    tags=["Composite Product"],
+)
+def proxy_create_product(product: ProductCreate):
+    """Proxy: create a product via the Product Service."""
+    resp = requests.post(
+        f"{PRODUCT_SERVICE_URL}/products",
+        json=product.model_dump(mode="json")
+    )
+    return _check(resp, "Product")
+@app.get(
+    "/composite/products",
+    response_model=List[ProductRead],
+    tags=["Composite Product"],
+)
+def proxy_list_products(
+    category_id: Optional[UUID] = None,
+    inventory_id: Optional[UUID] = None,
+):
+    """Proxy: list products via the Product Service."""
+    params = {
+        k: v for k, v in {
+            "category_id": category_id,
+            "inventory_id": inventory_id,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{PRODUCT_SERVICE_URL}/products",
+        params=params
+    )
+    return _check(resp, "Product list")
 
 
 @app.get("/composite/products/{product_id}")
