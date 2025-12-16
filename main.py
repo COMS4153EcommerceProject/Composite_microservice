@@ -64,7 +64,7 @@ def _check(resp: requests.Response, name: str):
 '''
 Proxy for user
 '''
-@app.post("/composite/users", response_model=UserRead)
+@app.post("/composite/users", response_model=UserRead, tags=["User Proxy"])
 def proxy_create_user(user: UserCreate):
     """Proxy: create a user via the User Service."""
     resp = requests.post(
@@ -74,7 +74,7 @@ def proxy_create_user(user: UserCreate):
     return _check(resp, "User")
 
 
-@app.get("/composite/users", response_model=list[UserRead])
+@app.get("/composite/users", response_model=list[UserRead], tags=["User Proxy"])
 def proxy_list_users(
     first_name: str | None = None,
     last_name: str | None = None,
@@ -96,14 +96,14 @@ def proxy_list_users(
     return _check(resp, "User list")
 
 
-@app.get("/composite/users/{user_id}", response_model=UserRead)
+@app.get("/composite/users/{user_id}", response_model=UserRead, tags=["User Proxy"])
 def proxy_get_user(user_id: UUID):
     """Proxy: get a single user via the User Service."""
     resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
     return _check(resp, "User")
 
 
-@app.patch("/composite/users/{user_id}", response_model=UserRead)
+@app.patch("/composite/users/{user_id}", response_model=UserRead, tags=["User Proxy"])
 def proxy_update_user(user_id: UUID, update: UserUpdate):
     """Proxy: update a user via the User Service."""
     resp = requests.patch(
@@ -113,7 +113,7 @@ def proxy_update_user(user_id: UUID, update: UserUpdate):
     return _check(resp, "User")
 
 
-@app.delete("/composite/users/{user_id}", status_code=204)
+@app.delete("/composite/users/{user_id}", status_code=204, tags=["User Proxy"])
 def proxy_delete_user(user_id: UUID):
     """Proxy: delete a user via the User Service."""
     resp = requests.delete(f"{USER_SERVICE_URL}/users/{user_id}")
@@ -126,7 +126,7 @@ def proxy_delete_user(user_id: UUID):
 '''
 proxy for address
 '''
-@app.post("/composite/addresses", response_model=AddressRead, status_code=201)
+@app.post("/composite/addresses", response_model=AddressRead, status_code=201, tags=["User Proxy"])
 def proxy_create_address(address: AddressCreate):
     """Proxy: create an address via the User Service."""
     resp = requests.post(
@@ -135,7 +135,7 @@ def proxy_create_address(address: AddressCreate):
     )
     return _check(resp, "Address")
 
-@app.get("/composite/addresses", response_model=List[AddressRead])
+@app.get("/composite/addresses", response_model=List[AddressRead], tags=["User Proxy"])
 def proxy_list_addresses(
     street: Optional[str] = None,
     city: Optional[str] = None,
@@ -158,7 +158,7 @@ def proxy_list_addresses(
     )
     return _check(resp, "Address list")
 
-@app.get("/composite/addresses/{address_id}", response_model=AddressRead)
+@app.get("/composite/addresses/{address_id}", response_model=AddressRead, tags=["User Proxy"])
 def proxy_get_address(address_id: UUID):
     """Proxy: get a single address via the User Service."""
     resp = requests.get(
@@ -166,7 +166,7 @@ def proxy_get_address(address_id: UUID):
     )
     return _check(resp, "Address")
 
-@app.patch("/composite/addresses/{address_id}", response_model=AddressRead)
+@app.patch("/composite/addresses/{address_id}", response_model=AddressRead, tags=["User Proxy"])
 def proxy_update_address(address_id: UUID, update: AddressUpdate):
     """Proxy: update an address via the User Service."""
     resp = requests.patch(
@@ -175,7 +175,7 @@ def proxy_update_address(address_id: UUID, update: AddressUpdate):
     )
     return _check(resp, "Address")
 
-@app.delete("/composite/addresses/{address_id}", status_code=204)
+@app.delete("/composite/addresses/{address_id}", status_code=204, tags=["User Proxy"])
 def proxy_delete_address(address_id: UUID):
     """Proxy: delete an address via the User Service."""
     resp = requests.delete(
@@ -190,7 +190,7 @@ def proxy_delete_address(address_id: UUID):
 '''
 proxy for preferences
 '''
-@app.post("/composite/preferences", response_model=PreferenceRead, status_code=201)
+@app.post("/composite/preferences", response_model=PreferenceRead, status_code=201, tags=["User Proxy"])
 def proxy_create_preference(pref: PreferenceCreate):
     """Proxy: create a preference via the User Service."""
     resp = requests.post(
@@ -199,7 +199,7 @@ def proxy_create_preference(pref: PreferenceCreate):
     )
     return _check(resp, "Preference")
 
-@app.get("/composite/preferences", response_model=List[PreferenceRead])
+@app.get("/composite/preferences", response_model=List[PreferenceRead], tags=["User Proxy"])
 def proxy_list_preferences(
     language: Optional[str] = None,
     currency: Optional[str] = None,
@@ -218,7 +218,7 @@ def proxy_list_preferences(
     )
     return _check(resp, "Preference list")
 
-@app.get("/composite/preferences/{user_id}", response_model=PreferenceRead)
+@app.get("/composite/preferences/{user_id}", response_model=PreferenceRead, tags=["User Proxy"])
 def proxy_get_preference(user_id: UUID):
     """Proxy: get a preference via the User Service."""
     resp = requests.get(
@@ -226,7 +226,7 @@ def proxy_get_preference(user_id: UUID):
     )
     return _check(resp, "Preference")
 
-@app.patch("/composite/preferences/{user_id}", response_model=PreferenceRead)
+@app.patch("/composite/preferences/{user_id}", response_model=PreferenceRead, tags=["User Proxy"])
 def proxy_update_preference(user_id: UUID, update: PreferenceUpdate):
     """Proxy: update a preference via the User Service."""
     resp = requests.patch(
@@ -235,7 +235,7 @@ def proxy_update_preference(user_id: UUID, update: PreferenceUpdate):
     )
     return _check(resp, "Preference")
 
-@app.delete("/composite/preferences/{user_id}", status_code=204)
+@app.delete("/composite/preferences/{user_id}", status_code=204, tags=["User Proxy"])
 def proxy_delete_preference(user_id: UUID):
     """Proxy: delete a preference via the User Service."""
     resp = requests.delete(
@@ -253,6 +253,7 @@ proxy for user_address
 @app.get(
     "/composite/user_addresses/{user_id}/{addr_id}",
     response_model=UserAddressRead,
+    tags=["User Proxy"]
 )
 def proxy_get_user_address(user_id: UUID, addr_id: UUID):
     """Proxy: get a user-address mapping via the User Service."""
@@ -265,6 +266,7 @@ def proxy_get_user_address(user_id: UUID, addr_id: UUID):
 @app.delete(
     "/composite/user_addresses/{user_id}/{addr_id}",
     status_code=204,
+    tags=["User Proxy"]
 )
 def proxy_delete_user_address(user_id: UUID, addr_id: UUID):
     """Proxy: delete a user-address mapping via the User Service."""
@@ -284,7 +286,7 @@ proxy for product
     "/composite/products",
     response_model=ProductRead,
     status_code=201,
-    tags=["Composite Product"],
+    tags=["Product Proxy"],
 )
 def proxy_create_product(product: ProductCreate):
     """Proxy: create a product via the Product Service."""
@@ -296,7 +298,7 @@ def proxy_create_product(product: ProductCreate):
 @app.get(
     "/composite/products",
     response_model=List[ProductRead],
-    tags=["Composite Product"],
+    tags=["Product Proxy"],
 )
 def proxy_list_products(
     category_id: Optional[UUID] = None,
@@ -317,7 +319,7 @@ def proxy_list_products(
     return _check(resp, "Product list")
 
 
-@app.get("/composite/products/{product_id}")
+@app.get("/composite/products/{product_id}", response_model=ProductRead, tags=["Product Proxy"],)
 def proxy_get_product(product_id: UUID):
     """Proxy: get a single product via the Product Service."""
     resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
@@ -326,7 +328,7 @@ def proxy_get_product(product_id: UUID):
 @app.put(
     "/composite/products/{product_id}",
     response_model=ProductRead,
-    tags=["Composite Product"],
+    tags=["Product Proxy"],
 )
 def proxy_update_product(product_id: UUID, update: ProductUpdate):
     """Proxy: update a product via the Product Service."""
@@ -339,7 +341,7 @@ def proxy_update_product(product_id: UUID, update: ProductUpdate):
 @app.delete(
     "/composite/products/{product_id}",
     response_model=dict,
-    tags=["Composite Product"],
+    tags=["Product Proxy"],
 )
 def proxy_delete_product(product_id: UUID):
     """Proxy: delete a product via the Product Service."""
@@ -360,7 +362,7 @@ proxy for category
     "/composite/categories",
     response_model=CategoryRead,
     status_code=201,
-    tags=["Composite Category"],
+    tags=["Product Proxy"],
 )
 def proxy_create_category(category: CategoryCreate):
     """Proxy: create a category via the Category Service."""
@@ -373,7 +375,7 @@ def proxy_create_category(category: CategoryCreate):
 @app.get(
     "/composite/categories",
     response_model=List[CategoryRead],
-    tags=["Composite Category"],
+    tags=["Product Proxy"],
 )
 def proxy_list_categories(name: Optional[str] = None):
     """Proxy: list categories via the Category Service."""
@@ -390,7 +392,7 @@ def proxy_list_categories(name: Optional[str] = None):
 @app.get(
     "/composite/categories/{category_id}",
     response_model=CategoryRead,
-    tags=["Composite Category"],
+    tags=["Product Proxy"],
 )
 def proxy_get_category(category_id: UUID):
     """Proxy: get a category via the Category Service."""
@@ -402,7 +404,7 @@ def proxy_get_category(category_id: UUID):
 @app.put(
     "/composite/categories/{category_id}",
     response_model=CategoryRead,
-    tags=["Composite Category"],
+    tags=["Product Proxy"],
 )
 def proxy_update_category(category_id: UUID, update: CategoryUpdate):
     """Proxy: update a category via the Category Service."""
@@ -415,7 +417,7 @@ def proxy_update_category(category_id: UUID, update: CategoryUpdate):
 @app.delete(
     "/composite/categories/{category_id}",
     response_model=dict,
-    tags=["Composite Category"],
+    tags=["Product Proxy"],
 )
 def proxy_delete_category(category_id: UUID):
     """Proxy: delete a category via the Category Service."""
@@ -435,7 +437,7 @@ proxy for inventory
     "/composite/inventories",
     response_model=InventoryRead,
     status_code=201,
-    tags=["Composite Inventory"],
+    tags=["Product Proxy"],
 )
 def proxy_create_inventory(inventory: InventoryCreate):
     """Proxy: create an inventory via the Product Service."""
@@ -448,7 +450,7 @@ def proxy_create_inventory(inventory: InventoryCreate):
 @app.get(
     "/composite/inventories",
     response_model=List[InventoryRead],
-    tags=["Composite Inventory"],
+    tags=["Product Proxy"],
 )
 def proxy_list_inventories(
     product_id: Optional[UUID] = None,
@@ -471,7 +473,7 @@ def proxy_list_inventories(
 @app.get(
     "/composite/inventories/{inventory_id}",
     response_model=InventoryRead,
-    tags=["Composite Inventory"],
+    tags=["Product Proxy"],
 )
 def proxy_get_inventory(inventory_id: UUID):
     """Proxy: get an inventory via the Product Service."""
@@ -483,7 +485,7 @@ def proxy_get_inventory(inventory_id: UUID):
 @app.put(
     "/composite/inventories/{inventory_id}",
     response_model=InventoryRead,
-    tags=["Composite Inventory"],
+    tags=["Product Proxy"],
 )
 def proxy_update_inventory(inventory_id: UUID, update: InventoryUpdate):
     """Proxy: update an inventory via the Product Service."""
@@ -496,7 +498,7 @@ def proxy_update_inventory(inventory_id: UUID, update: InventoryUpdate):
 @app.delete(
     "/composite/inventories/{inventory_id}",
     response_model=dict,
-    tags=["Composite Inventory"],
+    tags=["Product Proxy"],
 )
 def proxy_delete_inventory(inventory_id: UUID):
     """Proxy: delete an inventory via the Product Service."""
@@ -516,6 +518,7 @@ proxy for orders
     "/composite/orders",
     response_model=OrderRead,
     status_code=201,
+    tags=["Order Proxy"],
 )
 def proxy_create_order(order: OrderCreate, request: Request):
     """Proxy: create an order via the Order Service."""
@@ -544,6 +547,7 @@ def proxy_create_order(order: OrderCreate, request: Request):
 @app.get(
     "/composite/orders",
     response_model=List[OrderRead],
+    tags=["Order Proxy"],
 )
 def proxy_list_orders(
     user_id: Optional[UUID] = None,
@@ -581,6 +585,7 @@ def proxy_list_orders(
 @app.get(
     "/composite/orders/{order_id}",
     response_model=OrderRead,
+    tags=["Order Proxy"],
 )
 def proxy_get_order(
     order_id: UUID,
@@ -609,6 +614,7 @@ def proxy_get_order(
 @app.put(
     "/composite/orders/{order_id}",
     response_model=OrderRead,
+    tags=["Order Proxy"],
 )
 def proxy_update_order(
     order_id: UUID,
@@ -639,6 +645,7 @@ def proxy_update_order(
 @app.delete(
     "/composite/orders/{order_id}",
     response_model=OrderRead,
+    tags=["Order Proxy"],
 )
 def proxy_delete_order(order_id: UUID):
     resp = requests.delete(
@@ -653,6 +660,7 @@ Proxy for payments
     "/composite/payments",
     response_model=PaymentRead,
     status_code=201,
+    tags=["Order Proxy"],
 )
 def proxy_create_payment(payment: PaymentCreate):
     """Proxy: create a payment via the Order Service."""
@@ -676,6 +684,7 @@ def proxy_create_payment(payment: PaymentCreate):
 @app.get(
     "/composite/payments",
     response_model=List[PaymentRead],
+    tags=["Order Proxy"],
 )
 def proxy_list_payments(
     order_id: Optional[UUID] = None,
@@ -713,6 +722,7 @@ def proxy_list_payments(
 @app.get(
     "/composite/payments/{payment_id}",
     response_model=PaymentRead,
+    tags=["Order Proxy"],
 )
 def proxy_get_payment(payment_id: UUID):
     """Proxy: get a payment via the Order Service."""
@@ -724,6 +734,7 @@ def proxy_get_payment(payment_id: UUID):
 @app.put(
     "/composite/payments/{payment_id}",
     response_model=PaymentRead,
+    tags=["Order Proxy"],
 )
 def proxy_update_payment(payment_id: UUID, update: PaymentUpdate):
     """Proxy: update a payment via the Order Service."""
@@ -736,6 +747,7 @@ def proxy_update_payment(payment_id: UUID, update: PaymentUpdate):
 @app.delete(
     "/composite/payments/{payment_id}",
     response_model=PaymentRead,
+    tags=["Order Proxy"],
 )
 def proxy_delete_payment(payment_id: UUID):
     """Proxy: delete a payment via the Order Service."""
@@ -751,6 +763,7 @@ Proxy for Order Detail
     "/composite/order-details",
     response_model=OrderDetailRead,
     status_code=201,
+    tags=["Order Proxy"],
 )
 def proxy_create_order_detail(order_detail: OrderDetailCreate):
     """Proxy: create an order detail via the Order Service."""
@@ -773,6 +786,7 @@ def proxy_create_order_detail(order_detail: OrderDetailCreate):
 @app.get(
     "/composite/order-details",
     response_model=List[OrderDetailRead],
+    tags=["Order Proxy"],
 )
 def proxy_list_order_details(
     order_id: Optional[UUID] = None,
@@ -810,6 +824,7 @@ def proxy_list_order_details(
 @app.get(
     "/composite/order-details/{order_id}/{prod_id}",
     response_model=OrderDetailRead,
+    tags=["Order Proxy"],
 )
 def proxy_get_order_detail(order_id: UUID, prod_id: UUID):
     """Proxy: get an order detail via the Order Service."""
@@ -820,6 +835,7 @@ def proxy_get_order_detail(order_id: UUID, prod_id: UUID):
 @app.put(
     "/composite/order-details/{order_id}/{prod_id}",
     response_model=OrderDetailRead,
+    tags=["Order Proxy"],
 )
 def proxy_update_order_detail(
     order_id: UUID,
@@ -836,6 +852,7 @@ def proxy_update_order_detail(
 @app.delete(
     "/composite/order-details/{order_id}/{prod_id}",
     response_model=OrderDetailRead,
+    tags=["Order Proxy"],
 )
 def proxy_delete_order_detail(order_id: UUID, prod_id: UUID):
     """Proxy: delete an order detail via the Order Service."""
@@ -844,7 +861,7 @@ def proxy_delete_order_detail(order_id: UUID, prod_id: UUID):
     )
     return _check(resp, "OrderDetail")
 
-@app.post("/composite/orders/process", status_code=202)
+@app.post("/composite/orders/process", status_code=202, tags=["Order Proxy"],)
 def proxy_process_order_async(order: OrderCreate):
     """Proxy: asynchronously process an order via the Order Service."""
     resp = requests.post(
@@ -864,7 +881,7 @@ def proxy_process_order_async(order: OrderCreate):
 
     return response
 
-@app.get("/composite/tasks/{task_id}/status")
+@app.get("/composite/tasks/{task_id}/status", tags=["Order Proxy"])
 def proxy_get_task_status(task_id: UUID):
     """Proxy: get async task status via the Order Service."""
     resp = requests.get(
