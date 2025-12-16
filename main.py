@@ -8,13 +8,13 @@ import uuid
 
 import requests
 from fastapi import FastAPI, HTTPException, status
-
+from models.composite import CheckoutRequest
 # -------------------------------------------------------------------
 # automic microservice urls
 # -------------------------------------------------------------------
-USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
-ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://localhost:8002")
-PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8003")
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "https://user-service-1056727803439.europe-west1.run.app")
+ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://136.116.101.124:8080")
+PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "https://product-service-1056727803439.us-central1.run.app")
 
 app = FastAPI(
     title="Composite Microservice",
@@ -26,16 +26,6 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 operations_store: Dict[str, Dict[str, Any]] = {}
 
-
-from pydantic import BaseModel, Field
-from typing import List
-
-class CheckoutItem(BaseModel):
-    product_id: UUID
-    quantity: int = Field(gt=0)
-
-class CheckoutRequest(BaseModel):
-    items: List[CheckoutItem]
 
 
 # -------------------------------------------------------------------
