@@ -50,7 +50,9 @@ def _check(resp: requests.Response, name: str):
 # -------------------------------------------------------------------
 # A) Proxy endpoints (re-expose atomic microservice APIs)
 # -------------------------------------------------------------------
-
+@app.get("/healthz")
+def healthz():
+    return {"message": "health_check"}
 @app.get("/composite/users/{user_id}")
 def proxy_get_user(user_id: UUID):
     """Proxy: get a single user via the User Service."""
@@ -289,9 +291,6 @@ def get_report(operation_id: str):
         raise HTTPException(status_code=404, detail="Operation not found")
     return operations_store[operation_id]
 # double check
-@app.get("/healthz")
-def healthz():
-    return {"message": "health_check"}
 
 @app.get("/favicon.ico")
 def favicon():
