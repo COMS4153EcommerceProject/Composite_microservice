@@ -975,7 +975,7 @@ def checkout(user_id: UUID, body: CheckoutRequest, request: Request):
         inv_update_payload = {"stock_quantity": new_qty}
 
         inv_up_resp = requests.put(
-            f"{PRODUCT_SERVICE_URL}/inventories/{item['product_id']}",
+            f"{PRODUCT_SERVICE_URL}/{item['product_id']}/inventory",
             json=inv_update_payload,
         )
         _check(inv_up_resp, "InventoryUpdate")
