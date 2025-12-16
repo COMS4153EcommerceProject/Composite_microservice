@@ -2,12 +2,17 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from uuid import UUID
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import uuid
 
 import requests
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Response
+
+from Composite_microservice.models.address import AddressRead, AddressCreate, AddressUpdate
+from Composite_microservice.models.preference import PreferenceRead, PreferenceCreate, PreferenceUpdate
+from Composite_microservice.models.user import UserRead, UserUpdate, UserCreate
+from Composite_microservice.models.user_address import UserAddressRead
 from models.composite import CheckoutRequest
 # -------------------------------------------------------------------
 # automic microservice urls
@@ -50,14 +55,221 @@ def _check(resp: requests.Response, name: str):
 # -------------------------------------------------------------------
 # A) Proxy endpoints (re-expose atomic microservice APIs)
 # -------------------------------------------------------------------
-@app.get("/composite/healthz")
-def healthz():
-    return {"message": "health_check"}
-@app.get("/composite/users/{user_id}")
+'''
+Proxy for user
+'''
+@app.post("/composite/users", response_model=UserRead)
+def proxy_create_user(user: UserCreate):
+    """Proxy: create a user via the User Service."""
+    resp = requests.post(
+        f"{USER_SERVICE_URL}/users",
+        json=user.model_dump(mode="json")
+    )
+    return _check(resp, "User")
+
+
+@app.get("/composite/users", response_model=list[UserRead])
+def proxy_list_users(
+    first_name: str | None = None,
+    last_name: str | None = None,
+    email: str | None = None,
+):
+    """Proxy: list users via the User Service."""
+    params = {
+        k: v for k, v in {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{USER_SERVICE_URL}/users",
+        params=params
+    )
+    return _check(resp, "User list")
+
+
+@app.get("/composite/users/{user_id}", response_model=UserRead)
 def proxy_get_user(user_id: UUID):
     """Proxy: get a single user via the User Service."""
     resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
     return _check(resp, "User")
+
+
+@app.patch("/composite/users/{user_id}", response_model=UserRead)
+def proxy_update_user(user_id: UUID, update: UserUpdate):
+    """Proxy: update a user via the User Service."""
+    resp = requests.patch(
+        f"{USER_SERVICE_URL}/users/{user_id}",
+        json=update.model_dump(mode="json", exclude_none=True)
+    )
+    return _check(resp, "User")
+
+
+@app.delete("/composite/users/{user_id}", status_code=204)
+def proxy_delete_user(user_id: UUID):
+    """Proxy: delete a user via the User Service."""
+    resp = requests.delete(f"{USER_SERVICE_URL}/users/{user_id}")
+
+    if resp.status_code == 204:
+        return Response(status_code=204)
+
+    return _check(resp, "User")
+
+'''
+proxy for address
+'''
+@app.post("/composite/addresses", response_model=AddressRead, status_code=201)
+def proxy_create_address(address: AddressCreate):
+    """Proxy: create an address via the User Service."""
+    resp = requests.post(
+        f"{USER_SERVICE_URL}/addresses",
+        json=address.model_dump(mode="json")
+    )
+    return _check(resp, "Address")
+
+@app.get("/composite/addresses", response_model=List[AddressRead])
+def proxy_list_addresses(
+    street: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    postal_code: Optional[str] = None,
+):
+    """Proxy: list addresses via the User Service."""
+    params = {
+        k: v for k, v in {
+            "street": street,
+            "city": city,
+            "state": state,
+            "postal_code": postal_code,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{USER_SERVICE_URL}/addresses",
+        params=params
+    )
+    return _check(resp, "Address list")
+
+@app.get("/composite/addresses/{address_id}", response_model=AddressRead)
+def proxy_get_address(address_id: UUID):
+    """Proxy: get a single address via the User Service."""
+    resp = requests.get(
+        f"{USER_SERVICE_URL}/addresses/{address_id}"
+    )
+    return _check(resp, "Address")
+
+@app.patch("/composite/addresses/{address_id}", response_model=AddressRead)
+def proxy_update_address(address_id: UUID, update: AddressUpdate):
+    """Proxy: update an address via the User Service."""
+    resp = requests.patch(
+        f"{USER_SERVICE_URL}/addresses/{address_id}",
+        json=update.model_dump(mode="json", exclude_none=True)
+    )
+    return _check(resp, "Address")
+
+@app.delete("/composite/addresses/{address_id}", status_code=204)
+def proxy_delete_address(address_id: UUID):
+    """Proxy: delete an address via the User Service."""
+    resp = requests.delete(
+        f"{USER_SERVICE_URL}/addresses/{address_id}"
+    )
+
+    if resp.status_code == 204:
+        return Response(status_code=204)
+
+    return _check(resp, "Address")
+
+'''
+proxy for preferences
+'''
+@app.post("/composite/preferences", response_model=PreferenceRead, status_code=201)
+def proxy_create_preference(pref: PreferenceCreate):
+    """Proxy: create a preference via the User Service."""
+    resp = requests.post(
+        f"{USER_SERVICE_URL}/preferences",
+        json=pref.model_dump(mode="json")
+    )
+    return _check(resp, "Preference")
+
+@app.get("/composite/preferences", response_model=List[PreferenceRead])
+def proxy_list_preferences(
+    language: Optional[str] = None,
+    currency: Optional[str] = None,
+):
+    """Proxy: list preferences via the User Service."""
+    params = {
+        k: v for k, v in {
+            "language": language,
+            "currency": currency,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{USER_SERVICE_URL}/preferences",
+        params=params
+    )
+    return _check(resp, "Preference list")
+
+@app.get("/composite/preferences/{user_id}", response_model=PreferenceRead)
+def proxy_get_preference(user_id: UUID):
+    """Proxy: get a preference via the User Service."""
+    resp = requests.get(
+        f"{USER_SERVICE_URL}/preferences/{user_id}"
+    )
+    return _check(resp, "Preference")
+
+@app.patch("/composite/preferences/{user_id}", response_model=PreferenceRead)
+def proxy_update_preference(user_id: UUID, update: PreferenceUpdate):
+    """Proxy: update a preference via the User Service."""
+    resp = requests.patch(
+        f"{USER_SERVICE_URL}/preferences/{user_id}",
+        json=update.model_dump(mode="json", exclude_none=True)
+    )
+    return _check(resp, "Preference")
+
+@app.delete("/composite/preferences/{user_id}", status_code=204)
+def proxy_delete_preference(user_id: UUID):
+    """Proxy: delete a preference via the User Service."""
+    resp = requests.delete(
+        f"{USER_SERVICE_URL}/preferences/{user_id}"
+    )
+
+    if resp.status_code == 204:
+        return Response(status_code=204)
+
+    return _check(resp, "Preference")
+
+'''
+proxy for user_address
+'''
+@app.get(
+    "/composite/user_addresses/{user_id}/{addr_id}",
+    response_model=UserAddressRead,
+)
+def proxy_get_user_address(user_id: UUID, addr_id: UUID):
+    """Proxy: get a user-address mapping via the User Service."""
+    resp = requests.get(
+        f"{USER_SERVICE_URL}/user_addresses/{user_id}/{addr_id}"
+    )
+    return _check(resp, "UserAddress")
+
+
+@app.delete(
+    "/composite/user_addresses/{user_id}/{addr_id}",
+    status_code=204,
+)
+def proxy_delete_user_address(user_id: UUID, addr_id: UUID):
+    """Proxy: delete a user-address mapping via the User Service."""
+    resp = requests.delete(
+        f"{USER_SERVICE_URL}/user_addresses/{user_id}/{addr_id}"
+    )
+
+    if resp.status_code == 204:
+        return Response(status_code=204)
+
+    return _check(resp, "UserAddress")
 
 
 @app.get("/composite/products/{product_id}")
