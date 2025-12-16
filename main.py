@@ -7,11 +7,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import uuid
 
 import requests
-from fastapi import FastAPI, HTTPException, status, Response
+from fastapi import FastAPI, HTTPException, status, Response, Header, Request
 
+from models.order_detail import OrderDetailRead, OrderDetailCreate, OrderDetailUpdate
+from models.payment import PaymentRead, PaymentCreate, PaymentUpdate
+from models.category import CategoryRead, CategoryCreate, CategoryUpdate
+from models.inventory import InventoryRead, InventoryCreate, InventoryUpdate
+from models.order import OrderRead, OrderUpdate, OrderCreate
 from models.address import AddressRead, AddressCreate, AddressUpdate
 from models.preference import PreferenceRead, PreferenceCreate, PreferenceUpdate
-from models.product import ProductRead, ProductCreate
+from models.product import ProductRead, ProductCreate, ProductUpdate
 from models.user import UserRead, UserUpdate, UserCreate
 from models.user_address import UserAddressRead
 from models.composite import CheckoutRequest
@@ -318,22 +323,554 @@ def proxy_get_product(product_id: UUID):
     resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
     return _check(resp, "Product")
 
+@app.put(
+    "/composite/products/{product_id}",
+    response_model=ProductRead,
+    tags=["Composite Product"],
+)
+def proxy_update_product(product_id: UUID, update: ProductUpdate):
+    """Proxy: update a product via the Product Service."""
+    resp = requests.put(
+        f"{PRODUCT_SERVICE_URL}/products/{product_id}",
+        json=update.model_dump(mode="json")
+    )
+    return _check(resp, "Product")
 
-@app.get("/composite/orders/{order_id}")
-def proxy_get_order(order_id: UUID):
-    """Proxy: get a single order via the Order Service."""
-    resp = requests.get(f"{ORDER_SERVICE_URL}/orders/{order_id}")
+@app.delete(
+    "/composite/products/{product_id}",
+    response_model=dict,
+    tags=["Composite Product"],
+)
+def proxy_delete_product(product_id: UUID):
+    """Proxy: delete a product via the Product Service."""
+    resp = requests.delete(
+        f"{PRODUCT_SERVICE_URL}/products/{product_id}"
+    )
+
+    # atomic 返回 JSON
+    if resp.status_code < 400:
+        return resp.json()
+
+    return _check(resp, "Product")
+
+'''
+proxy for category
+'''
+@app.post(
+    "/composite/categories",
+    response_model=CategoryRead,
+    status_code=201,
+    tags=["Composite Category"],
+)
+def proxy_create_category(category: CategoryCreate):
+    """Proxy: create a category via the Category Service."""
+    resp = requests.post(
+        f"{PRODUCT_SERVICE_URL}/categories",
+        json=category.model_dump(mode="json")
+    )
+    return _check(resp, "Category")
+
+@app.get(
+    "/composite/categories",
+    response_model=List[CategoryRead],
+    tags=["Composite Category"],
+)
+def proxy_list_categories(name: Optional[str] = None):
+    """Proxy: list categories via the Category Service."""
+    params = {}
+    if name is not None:
+        params["name"] = name
+
+    resp = requests.get(
+        f"{PRODUCT_SERVICE_URL}/categories",
+        params=params
+    )
+    return _check(resp, "Category list")
+
+@app.get(
+    "/composite/categories/{category_id}",
+    response_model=CategoryRead,
+    tags=["Composite Category"],
+)
+def proxy_get_category(category_id: UUID):
+    """Proxy: get a category via the Category Service."""
+    resp = requests.get(
+        f"{PRODUCT_SERVICE_URL}/categories/{category_id}"
+    )
+    return _check(resp, "Category")
+
+@app.put(
+    "/composite/categories/{category_id}",
+    response_model=CategoryRead,
+    tags=["Composite Category"],
+)
+def proxy_update_category(category_id: UUID, update: CategoryUpdate):
+    """Proxy: update a category via the Category Service."""
+    resp = requests.put(
+        f"{PRODUCT_SERVICE_URL}/categories/{category_id}",
+        json=update.model_dump(mode="json")
+    )
+    return _check(resp, "Category")
+
+@app.delete(
+    "/composite/categories/{category_id}",
+    response_model=dict,
+    tags=["Composite Category"],
+)
+def proxy_delete_category(category_id: UUID):
+    """Proxy: delete a category via the Category Service."""
+    resp = requests.delete(
+        f"{PRODUCT_SERVICE_URL}/categories/{category_id}"
+    )
+
+    if resp.status_code < 400:
+        return resp.json()
+
+    return _check(resp, "Category")
+
+'''
+proxy for inventory
+'''
+@app.post(
+    "/composite/inventories",
+    response_model=InventoryRead,
+    status_code=201,
+    tags=["Composite Inventory"],
+)
+def proxy_create_inventory(inventory: InventoryCreate):
+    """Proxy: create an inventory via the Product Service."""
+    resp = requests.post(
+        f"{PRODUCT_SERVICE_URL}/inventories",
+        json=inventory.model_dump(mode="json")
+    )
+    return _check(resp, "Inventory")
+
+@app.get(
+    "/composite/inventories",
+    response_model=List[InventoryRead],
+    tags=["Composite Inventory"],
+)
+def proxy_list_inventories(
+    product_id: Optional[UUID] = None,
+    warehouse_location: Optional[str] = None,
+):
+    """Proxy: list inventories via the Product Service."""
+    params = {
+        k: v for k, v in {
+            "product_id": product_id,
+            "warehouse_location": warehouse_location,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{PRODUCT_SERVICE_URL}/inventories",
+        params=params
+    )
+    return _check(resp, "Inventory list")
+
+@app.get(
+    "/composite/inventories/{inventory_id}",
+    response_model=InventoryRead,
+    tags=["Composite Inventory"],
+)
+def proxy_get_inventory(inventory_id: UUID):
+    """Proxy: get an inventory via the Product Service."""
+    resp = requests.get(
+        f"{PRODUCT_SERVICE_URL}/inventories/{inventory_id}"
+    )
+    return _check(resp, "Inventory")
+
+@app.put(
+    "/composite/inventories/{inventory_id}",
+    response_model=InventoryRead,
+    tags=["Composite Inventory"],
+)
+def proxy_update_inventory(inventory_id: UUID, update: InventoryUpdate):
+    """Proxy: update an inventory via the Product Service."""
+    resp = requests.put(
+        f"{PRODUCT_SERVICE_URL}/inventories/{inventory_id}",
+        json=update.model_dump(mode="json")
+    )
+    return _check(resp, "Inventory")
+
+@app.delete(
+    "/composite/inventories/{inventory_id}",
+    response_model=dict,
+    tags=["Composite Inventory"],
+)
+def proxy_delete_inventory(inventory_id: UUID):
+    """Proxy: delete an inventory via the Product Service."""
+    resp = requests.delete(
+        f"{PRODUCT_SERVICE_URL}/inventories/{inventory_id}"
+    )
+
+    if resp.status_code < 400:
+        return resp.json()
+
+    return _check(resp, "Inventory")
+
+'''
+proxy for orders
+'''
+@app.post(
+    "/composite/orders",
+    response_model=OrderRead,
+    status_code=201,
+)
+def proxy_create_order(order: OrderCreate, request: Request):
+    """Proxy: create an order via the Order Service."""
+    headers = {}
+    if "authorization" in request.headers:
+        headers["Authorization"] = request.headers["authorization"]
+
+    resp = requests.post(
+        f"{ORDER_SERVICE_URL}/orders",
+        json=order.model_dump(mode="json"),
+        headers=headers,
+    )
+
+    # Forward Location / ETag if present
+    response = Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+    )
+    for h in ("Location", "ETag"):
+        if h in resp.headers:
+            response.headers[h] = resp.headers[h]
+
+    return response
+
+@app.get(
+    "/composite/orders",
+    response_model=List[OrderRead],
+)
+def proxy_list_orders(
+    user_id: Optional[UUID] = None,
+    status: Optional[str] = None,
+    order_date_from: Optional[datetime] = None,
+    order_date_to: Optional[datetime] = None,
+    min_total_price: Optional[float] = None,
+    max_total_price: Optional[float] = None,
+    sort_by: Optional[str] = None,
+    order: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+):
+    params = {
+        k: v for k, v in {
+            "user_id": user_id,
+            "status": status,
+            "order_date_from": order_date_from,
+            "order_date_to": order_date_to,
+            "min_total_price": min_total_price,
+            "max_total_price": max_total_price,
+            "sort_by": sort_by,
+            "order": order,
+            "limit": limit,
+            "offset": offset,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/orders",
+        params=params
+    )
+    return _check(resp, "Order list")
+
+@app.get(
+    "/composite/orders/{order_id}",
+    response_model=OrderRead,
+)
+def proxy_get_order(
+    order_id: UUID,
+    if_none_match: Optional[str] = Header(None, alias="If-None-Match"),
+):
+    headers = {}
+    if if_none_match:
+        headers["If-None-Match"] = if_none_match
+
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/orders/{order_id}",
+        headers=headers
+    )
+
+    response = Response(
+        content=resp.content if resp.status_code != 304 else None,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+    )
+
+    if "ETag" in resp.headers:
+        response.headers["ETag"] = resp.headers["ETag"]
+
+    return response
+
+@app.put(
+    "/composite/orders/{order_id}",
+    response_model=OrderRead,
+)
+def proxy_update_order(
+    order_id: UUID,
+    update: OrderUpdate,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
+):
+    headers = {}
+    if if_match:
+        headers["If-Match"] = if_match
+
+    resp = requests.put(
+        f"{ORDER_SERVICE_URL}/orders/{order_id}",
+        json=update.model_dump(mode="json"),
+        headers=headers,
+    )
+
+    response = Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+    )
+
+    if "ETag" in resp.headers:
+        response.headers["ETag"] = resp.headers["ETag"]
+
+    return response
+
+@app.delete(
+    "/composite/orders/{order_id}",
+    response_model=OrderRead,
+)
+def proxy_delete_order(order_id: UUID):
+    resp = requests.delete(
+        f"{ORDER_SERVICE_URL}/orders/{order_id}"
+    )
     return _check(resp, "Order")
 
+'''
+Proxy for payments
+'''
+@app.post(
+    "/composite/payments",
+    response_model=PaymentRead,
+    status_code=201,
+)
+def proxy_create_payment(payment: PaymentCreate):
+    """Proxy: create a payment via the Order Service."""
+    resp = requests.post(
+        f"{ORDER_SERVICE_URL}/payments",
+        json=payment.model_dump(mode="json")
+    )
 
-@app.get("/composite/products/{product_id}/inventory")
-def proxy_get_inventory(product_id: UUID):
-    """
-    Proxy: get inventory for a product via the Product Service.
-    Uses the /products/{product_id}/inventory endpoint of the Product service.
-    """
-    resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}/inventory")
-    return _check(resp, "Inventory")
+    # 透传 body + header
+    response = Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+    )
+    for h in ("Location", "ETag"):
+        if h in resp.headers:
+            response.headers[h] = resp.headers[h]
+
+    return response
+
+@app.get(
+    "/composite/payments",
+    response_model=List[PaymentRead],
+)
+def proxy_list_payments(
+    order_id: Optional[UUID] = None,
+    payment_method: Optional[str] = None,
+    payment_date_from: Optional[datetime] = None,
+    payment_date_to: Optional[datetime] = None,
+    min_amount: Optional[float] = None,
+    max_amount: Optional[float] = None,
+    sort_by: Optional[str] = None,
+    order: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+):
+    params = {
+        k: v for k, v in {
+            "order_id": order_id,
+            "payment_method": payment_method,
+            "payment_date_from": payment_date_from,
+            "payment_date_to": payment_date_to,
+            "min_amount": min_amount,
+            "max_amount": max_amount,
+            "sort_by": sort_by,
+            "order": order,
+            "limit": limit,
+            "offset": offset,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/payments",
+        params=params
+    )
+    return _check(resp, "Payment list")
+
+@app.get(
+    "/composite/payments/{payment_id}",
+    response_model=PaymentRead,
+)
+def proxy_get_payment(payment_id: UUID):
+    """Proxy: get a payment via the Order Service."""
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/payments/{payment_id}"
+    )
+    return _check(resp, "Payment")
+
+@app.put(
+    "/composite/payments/{payment_id}",
+    response_model=PaymentRead,
+)
+def proxy_update_payment(payment_id: UUID, update: PaymentUpdate):
+    """Proxy: update a payment via the Order Service."""
+    resp = requests.put(
+        f"{ORDER_SERVICE_URL}/payments/{payment_id}",
+        json=update.model_dump(mode="json")
+    )
+    return _check(resp, "Payment")
+
+@app.delete(
+    "/composite/payments/{payment_id}",
+    response_model=PaymentRead,
+)
+def proxy_delete_payment(payment_id: UUID):
+    """Proxy: delete a payment via the Order Service."""
+    resp = requests.delete(
+        f"{ORDER_SERVICE_URL}/payments/{payment_id}"
+    )
+    return _check(resp, "Payment")
+
+'''
+Proxy for Order Detail
+'''
+@app.post(
+    "/composite/order-details",
+    response_model=OrderDetailRead,
+    status_code=201,
+)
+def proxy_create_order_detail(order_detail: OrderDetailCreate):
+    """Proxy: create an order detail via the Order Service."""
+    resp = requests.post(
+        f"{ORDER_SERVICE_URL}/order-details",
+        json=order_detail.model_dump(mode="json")
+    )
+
+    response = Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+    )
+    for h in ("Location", "ETag"):
+        if h in resp.headers:
+            response.headers[h] = resp.headers[h]
+
+    return response
+
+@app.get(
+    "/composite/order-details",
+    response_model=List[OrderDetailRead],
+)
+def proxy_list_order_details(
+    order_id: Optional[UUID] = None,
+    prod_id: Optional[UUID] = None,
+    min_quantity: Optional[int] = None,
+    max_quantity: Optional[int] = None,
+    min_subtotal: Optional[float] = None,
+    max_subtotal: Optional[float] = None,
+    sort_by: Optional[str] = None,
+    order: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+):
+    params = {
+        k: v for k, v in {
+            "order_id": order_id,
+            "prod_id": prod_id,
+            "min_quantity": min_quantity,
+            "max_quantity": max_quantity,
+            "min_subtotal": min_subtotal,
+            "max_subtotal": max_subtotal,
+            "sort_by": sort_by,
+            "order": order,
+            "limit": limit,
+            "offset": offset,
+        }.items() if v is not None
+    }
+
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/order-details",
+        params=params
+    )
+    return _check(resp, "OrderDetail list")
+
+@app.get(
+    "/composite/order-details/{order_id}/{prod_id}",
+    response_model=OrderDetailRead,
+)
+def proxy_get_order_detail(order_id: UUID, prod_id: UUID):
+    """Proxy: get an order detail via the Order Service."""
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/order-details/{order_id}/{prod_id}"
+    )
+    return _check(resp, "OrderDetail")
+@app.put(
+    "/composite/order-details/{order_id}/{prod_id}",
+    response_model=OrderDetailRead,
+)
+def proxy_update_order_detail(
+    order_id: UUID,
+    prod_id: UUID,
+    update: OrderDetailUpdate,
+):
+    """Proxy: update an order detail via the Order Service."""
+    resp = requests.put(
+        f"{ORDER_SERVICE_URL}/order-details/{order_id}/{prod_id}",
+        json=update.model_dump(mode="json")
+    )
+    return _check(resp, "OrderDetail")
+
+@app.delete(
+    "/composite/order-details/{order_id}/{prod_id}",
+    response_model=OrderDetailRead,
+)
+def proxy_delete_order_detail(order_id: UUID, prod_id: UUID):
+    """Proxy: delete an order detail via the Order Service."""
+    resp = requests.delete(
+        f"{ORDER_SERVICE_URL}/order-details/{order_id}/{prod_id}"
+    )
+    return _check(resp, "OrderDetail")
+
+@app.post("/composite/orders/process", status_code=202)
+def proxy_process_order_async(order: OrderCreate):
+    """Proxy: asynchronously process an order via the Order Service."""
+    resp = requests.post(
+        f"{ORDER_SERVICE_URL}/orders/process",
+        json=order.model_dump(mode="json")
+    )
+
+    response = Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+    )
+
+    # Forward Location header (task status URL)
+    if "Location" in resp.headers:
+        response.headers["Location"] = resp.headers["Location"]
+
+    return response
+
+@app.get("/composite/tasks/{task_id}/status")
+def proxy_get_task_status(task_id: UUID):
+    """Proxy: get async task status via the Order Service."""
+    resp = requests.get(
+        f"{ORDER_SERVICE_URL}/tasks/{task_id}/status"
+    )
+    return _check(resp, "TaskStatus")
 
 # -------------------------------------------------------------------
 # 1) Checkout
