@@ -21,6 +21,12 @@ app = FastAPI(
     title="Composite Microservice",
     description="Composite service that orchestrates User, Order, and Product services.",
     version="0.1.0",
+    servers=[
+        {
+            "url": "https://composite-microservice-1056727803439.us-east4.run.app",
+            "description": "Cloud Run"
+        }
+    ],
 )
 
 executor = ThreadPoolExecutor(max_workers=10)
