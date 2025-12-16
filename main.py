@@ -1,0 +1,301 @@
+from __future__ import annotations
+import os
+from datetime import datetime
+from uuid import UUID
+from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import uuid
+
+import requests
+from fastapi import FastAPI, HTTPException, status
+
+# -------------------------------------------------------------------
+# automic microservice urls
+# -------------------------------------------------------------------
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
+ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://localhost:8002")
+PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8003")
+
+app = FastAPI(
+    title="Composite Microservice",
+    description="Composite service that orchestrates User, Order, and Product services.",
+    version="0.1.0",
+)
+
+executor = ThreadPoolExecutor(max_workers=10)
+
+operations_store: Dict[str, Dict[str, Any]] = {}
+
+
+from pydantic import BaseModel, Field
+from typing import List
+
+class CheckoutItem(BaseModel):
+    product_id: UUID
+    quantity: int = Field(gt=0)
+
+class CheckoutRequest(BaseModel):
+    items: List[CheckoutItem]
+
+
+# -------------------------------------------------------------------
+# Helper
+# -------------------------------------------------------------------
+def _check(resp: requests.Response, name: str):
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"{name} not found")
+    if not resp.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream error from {name} ({resp.status_code})"
+        )
+    return resp.json()
+# -------------------------------------------------------------------
+# A) Proxy endpoints (re-expose atomic microservice APIs)
+# -------------------------------------------------------------------
+
+@app.get("/composite/users/{user_id}")
+def proxy_get_user(user_id: UUID):
+    """Proxy: get a single user via the User Service."""
+    resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+    return _check(resp, "User")
+
+
+@app.get("/composite/products/{product_id}")
+def proxy_get_product(product_id: UUID):
+    """Proxy: get a single product via the Product Service."""
+    resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
+    return _check(resp, "Product")
+
+
+@app.get("/composite/orders/{order_id}")
+def proxy_get_order(order_id: UUID):
+    """Proxy: get a single order via the Order Service."""
+    resp = requests.get(f"{ORDER_SERVICE_URL}/orders/{order_id}")
+    return _check(resp, "Order")
+
+
+@app.get("/composite/products/{product_id}/inventory")
+def proxy_get_inventory(product_id: UUID):
+    """
+    Proxy: get inventory for a product via the Product Service.
+    Uses the /products/{product_id}/inventory endpoint of the Product service.
+    """
+    resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}/inventory")
+    return _check(resp, "Inventory")
+
+# -------------------------------------------------------------------
+# 1) Checkout
+# -------------------------------------------------------------------
+@app.post("/composite/users/{user_id}/checkout", status_code=201)
+def checkout(user_id: UUID, body: CheckoutRequest):
+    user_resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+    user_json = _check(user_resp, "User")
+
+    items_info: List[Dict[str, Any]] = []
+
+    for item in body.items:
+        product_id = item.product_id
+
+        p_resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
+        product = _check(p_resp, "Product")
+
+
+        inv_resp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}/inventory")
+        inventory = _check(inv_resp, "Inventory")
+
+        if inventory["stock_quantity"] < item.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough stock for product {product_id}"
+            )
+
+        line_total = product["price"] * item.quantity
+
+        items_info.append({
+            "product_id": product["product_id"],
+            "product": product,
+            "inventory": inventory,
+            "quantity": item.quantity,
+            "line_total": line_total,
+        })
+
+    # Create the order
+    total_price = sum(i["line_total"] for i in items_info)
+    order_payload = {
+        "user_id": str(user_id),
+        "order_date": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "total_price": total_price,
+        "status": "PENDING",
+    }
+    order_resp = requests.post(f"{ORDER_SERVICE_URL}/orders", json=order_payload)
+    order_json = _check(order_resp, "Order")
+    order_id = order_json["order_id"]
+
+    # Create corresponding OrderDetail for each order
+    details_out = []
+    for item in items_info:
+        detail_payload = {
+            "order_id": order_id,
+            "prod_id": item["product_id"],
+            "quantity": item["quantity"],
+            "subtotal": item["line_total"],
+        }
+
+        d_resp = requests.post(
+            f"{ORDER_SERVICE_URL}/order-details",
+            json=detail_payload
+        )
+        detail_json = _check(d_resp, "OrderDetail")
+        details_out.append(detail_json)
+
+        # Decrease the inventory
+        new_qty = item["inventory"]["stock_quantity"] - item["quantity"]
+        inv_update_payload = {"stock_quantity": new_qty}
+
+        inv_up_resp = requests.put(
+            f"{PRODUCT_SERVICE_URL}/inventories/{item['product_id']}",
+            json=inv_update_payload,
+        )
+        _check(inv_up_resp, "InventoryUpdate")
+
+    # Create payment (default method: credit card?)
+    pay_payload = {
+        "order_id": order_id,
+        "payment_method": "CREDIT_CARD",
+        "payment_date": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "amount": total_price,
+    }
+    pay_resp = requests.post(f"{ORDER_SERVICE_URL}/payments", json=pay_payload)
+    payment_json = _check(pay_resp, "Payment")
+
+    return {
+        "user": user_json,
+        "order": order_json,
+        "order_details": details_out,
+        "payment": payment_json,
+    }
+
+
+@app.get("/composite/users/{user_id}/order-summary")
+def order_summary(user_id: UUID):
+
+    def f_user():
+        resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+        return _check(resp, "User")
+
+    def f_pref():
+        resp = requests.get(f"{USER_SERVICE_URL}/preferences/{user_id}")
+        if resp.status_code == 404:
+            return None
+        return _check(resp, "Preference")
+
+    def f_addresses():
+        resp = requests.get(
+            f"{USER_SERVICE_URL}/user_addresses",
+            params={"user_id": str(user_id)}
+        )
+        mappings = _check(resp, "UserAddress")
+
+        out = []
+        for m in mappings:
+            addr_id = m["addr_id"]
+            ar = requests.get(f"{USER_SERVICE_URL}/addresses/{addr_id}")
+
+            if ar.status_code == 404:
+                continue
+
+            addr_json = _check(ar, "Address")
+            out.append(addr_json)
+
+        return out
+
+    def f_orders():
+        resp = requests.get(
+            f"{ORDER_SERVICE_URL}/orders",
+            params={"user_id": str(user_id)}
+        )
+        if not resp.ok:
+            return []
+        return resp.json()
+
+    futures = {
+        executor.submit(f_user): "user",
+        executor.submit(f_pref): "pref",
+        executor.submit(f_addresses): "addr",
+        executor.submit(f_orders): "orders",
+    }
+
+    data: Dict[str, Any] = {}
+    for f in as_completed(futures):
+        key = futures[f]
+        data[key] = f.result()
+
+    enriched_orders = []
+
+    def enrich(order):
+        oid = order["order_id"]
+
+        pay_r = requests.get(f"{ORDER_SERVICE_URL}/payments", params={"order_id": oid})
+        payments = pay_r.json() if pay_r.ok else []
+
+        det_r = requests.get(f"{ORDER_SERVICE_URL}/order-details", params={"order_id": oid})
+        details = det_r.json() if det_r.ok else []
+
+        for d in details:
+            pid = d["prod_id"]
+            p_r = requests.get(f"{PRODUCT_SERVICE_URL}/products/{pid}")
+            if p_r.ok:
+                d["product"] = p_r.json()
+            i_r = requests.get(f"{PRODUCT_SERVICE_URL}/inventories/{pid}")
+            if i_r.ok:
+                d["inventory"] = i_r.json()
+
+        return {
+            "order": order,
+            "payments": payments,
+            "details": details,
+        }
+
+    futures2 = {executor.submit(enrich, o): o["order_id"] for o in data["orders"]}
+    for fs in as_completed(futures2):
+        enriched_orders.append(fs.result())
+
+    return {
+        "user": data["user"],
+        "preference": data.get("pref"),
+        "addresses": data["addr"],
+        "orders": enriched_orders,
+    }
+
+
+
+@app.post("/composite/reports/user-orders", status_code=202)
+def generate_report(user_id: UUID):
+    op_id = str(uuid.uuid4())
+    operations_store[op_id] = {"status": "PENDING", "result": None}
+
+    def job():
+        try:
+            r = order_summary(user_id)
+            operations_store[op_id] = {"status": "COMPLETED", "result": r}
+        except Exception as e:
+            operations_store[op_id] = {"status": "FAILED", "error": str(e)}
+
+    executor.submit(job)
+    return {"operation_id": op_id, "status": "PENDING"}
+
+
+@app.get("/composite/reports/user-orders/{operation_id}")
+def get_report(operation_id: str):
+    if operation_id not in operations_store:
+        raise HTTPException(status_code=404, detail="Operation not found")
+    return operations_store[operation_id]
+
+
+# -------------------------------------------------------------------
+# Root
+# -------------------------------------------------------------------
+@app.get("/")
+def root():
+    return {"message": "Composite service ready. Orchestrating User/Order/Product."}
