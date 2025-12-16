@@ -1017,6 +1017,9 @@ def order_summary(user_id: UUID):
             f"{USER_SERVICE_URL}/user_addresses",
             params={"user_id": str(user_id)}
         )
+        if resp.status_code in (404, 501):
+            return []
+
         mappings = _check(resp, "UserAddress")
 
         out = []
