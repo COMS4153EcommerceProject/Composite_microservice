@@ -291,6 +291,7 @@ def get_report(operation_id: str):
     if operation_id not in operations_store:
         raise HTTPException(status_code=404, detail="Operation not found")
     return operations_store[operation_id]
+# double check
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
