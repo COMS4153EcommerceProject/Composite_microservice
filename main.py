@@ -15,6 +15,7 @@ from models.composite import CheckoutRequest
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "https://user-service-1056727803439.europe-west1.run.app")
 ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://136.116.101.124:8080")
 PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "https://product-service-1056727803439.us-central1.run.app")
+port = int(os.environ.get("FASTAPIPORT", 8000))
 
 app = FastAPI(
     title="Composite Microservice",
@@ -297,3 +298,8 @@ def favicon():
 @app.get("/")
 def root():
     return {"message": "Composite service ready. Orchestrating User/Order/Product."}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
