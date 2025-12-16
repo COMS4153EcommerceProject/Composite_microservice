@@ -284,7 +284,7 @@ def get_report(operation_id: str):
 # double check
 @app.get("/healthz")
 def healthz():
-    return {"ok": True}
+    return {"message": "health_check"}
 
 @app.get("/favicon.ico")
 def favicon():
