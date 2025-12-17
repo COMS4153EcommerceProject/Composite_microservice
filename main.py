@@ -40,6 +40,15 @@ app = FastAPI(
     ],
 )
 
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],        # 先调通
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],        # 关键：允许 Authorization / Content-Type
+)
+
 report_executor = ThreadPoolExecutor(max_workers=1)
 summary_executor = ThreadPoolExecutor(max_workers=8)
 
