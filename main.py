@@ -40,7 +40,9 @@ app = FastAPI(
     ],
 )
 
-executor = ThreadPoolExecutor(max_workers=10)
+report_executor = ThreadPoolExecutor(max_workers=1)
+summary_executor = ThreadPoolExecutor(max_workers=8)
+
 
 operations_store: Dict[str, Dict[str, Any]] = {}
 
@@ -1001,7 +1003,7 @@ def checkout(user_id: UUID, body: CheckoutRequest, request: Request):
 
 @app.get("/composite/users/{user_id}/order-summary")
 def order_summary(user_id: UUID):
-
+    executor = summary_executor
     def f_user():
         resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
         return _check(resp, "User")
@@ -1103,12 +1105,23 @@ def generate_report(user_id: UUID):
     def job():
         try:
             r = order_summary(user_id)
-            operations_store[op_id] = {"status": "COMPLETED", "result": r}
+            operations_store[op_id] = {
+                "status": "COMPLETED",
+                "result": r
+            }
         except Exception as e:
-            operations_store[op_id] = {"status": "FAILED", "error": str(e)}
+            operations_store[op_id] = {
+                "status": "FAILED",
+                "error": str(e)
+            }
 
-    executor.submit(job)
-    return {"operation_id": op_id, "status": "PENDING"}
+    report_executor.submit(job)
+
+    return {
+        "operation_id": op_id,
+        "status": "PENDING"
+    }
+
 
 
 @app.get("/composite/reports/user-orders/{operation_id}")
